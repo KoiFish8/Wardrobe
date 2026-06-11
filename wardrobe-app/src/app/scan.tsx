@@ -8,14 +8,14 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Button, Card, Chip, ThemedText } from '@/components/ui';
+import { Button, Chip, ThemedText } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAddGarment } from '@/lib/queries';
 import { SAMPLE_IMAGES } from '@/lib/sampleImages';
-import { useBackend } from '@/lib/session';
+import { RequireSession, useBackend } from '@/lib/session';
 import { ALL_TAGS } from '@/lib/styleLibrary';
 import { deriveLibraryTags } from '@/lib/tagMapping';
 import type { Category, GarmentSchema } from '@/lib/types';
@@ -25,6 +25,14 @@ const CATEGORIES: Category[] = ['top', 'bottom', 'dress', 'outerwear', 'shoes', 
 type Phase = 'pick' | 'tagging' | 'confirm';
 
 export default function ScanScreen() {
+  return (
+    <RequireSession>
+      <ScanFlow />
+    </RequireSession>
+  );
+}
+
+function ScanFlow() {
   const theme = useTheme();
   const router = useRouter();
   const backend = useBackend();
@@ -101,19 +109,42 @@ export default function ScanScreen() {
   }
 
   if (phase === 'tagging') {
+    const pendingSource = imageUri
+      ? { uri: imageUri }
+      : sampleId && SAMPLE_IMAGES[sampleId]
+        ? SAMPLE_IMAGES[sampleId]
+        : null;
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <ThemedText variant="heading">Tagging your garment…</ThemedText>
-        <ThemedText variant="caption" style={{ marginTop: Spacing.two }}>
+        {pendingSource ? (
+          <Image
+            source={pendingSource}
+            style={[styles.taggingPreview, { backgroundColor: theme.backgroundElement }]}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : null}
+        <ActivityIndicator color={theme.text} style={{ marginTop: Spacing.four }} />
+        <ThemedText variant="heading" style={{ marginTop: Spacing.three }}>
+          Reading your garment…
+        </ThemedText>
+        <ThemedText variant="caption" style={{ marginTop: Spacing.two, textAlign: 'center' }}>
           {backend.kind === 'supabase'
-            ? 'Claude Haiku is reading the photo (≈ $0.003).'
-            : 'Demo mode: using bundled fixture tags.'}
+            ? 'Looking at color, fit, material, and formality.'
+            : 'Demo mode — using bundled fixture tags.'}
         </ThemedText>
       </View>
     );
   }
 
   if (phase === 'confirm' && schema) {
+    const availableTags = ALL_TAGS.filter((t) => !tags.includes(t));
+    const confidenceLine =
+      schema.confidence === 'high'
+        ? 'Nice scan — these tags look solid.'
+        : schema.confidence === 'medium'
+          ? 'Mostly confident — worth a quick look below.'
+          : 'Hard to read this photo — please check the tags below.';
     return (
       <ScrollView
         style={{ backgroundColor: theme.background }}
@@ -126,45 +157,61 @@ export default function ScanScreen() {
           />
         ) : null}
 
-        {schema.confidence === 'low' ? (
-          <Card style={{ borderLeftWidth: 3, borderLeftColor: theme.warning }}>
-            <ThemedText variant="body">
-              Low-confidence tags{schema.note ? ` — ${schema.note}` : ''}. Please review below.
-            </ThemedText>
-          </Card>
-        ) : null}
-
-        <Card>
-          <ThemedText variant="label">Detected</ThemedText>
-          <ThemedText variant="heading" style={{ marginTop: Spacing.one }}>
+        <View>
+          <ThemedText variant="title">
             {schema.primary_color} {schema.subtype}
           </ThemedText>
-          <ThemedText variant="caption" style={{ marginTop: Spacing.one }}>
-            {schema.material_guess} · {schema.formality} · fit: {schema.fit_silhouette} · confidence:{' '}
-            {schema.confidence}
+          <ThemedText
+            variant="caption"
+            color={schema.confidence === 'high' ? theme.positive : theme.warning}
+            style={{ marginTop: Spacing.one }}>
+            {confidenceLine}
           </ThemedText>
-        </Card>
+          {schema.confidence === 'low' && schema.note ? (
+            <ThemedText variant="caption" style={{ marginTop: Spacing.one }}>
+              {schema.note}
+            </ThemedText>
+          ) : null}
+          <View style={[styles.chips, { marginTop: Spacing.two }]}>
+            <Chip small label={schema.material_guess} />
+            <Chip small label={schema.formality} />
+            <Chip small label={`${schema.fit_silhouette} fit`} />
+          </View>
+        </View>
 
-        <ThemedText variant="heading">Category</ThemedText>
+        <ThemedText variant="label">Category</ThemedText>
         <View style={styles.chips}>
           {CATEGORIES.map((c) => (
             <Chip key={c} small label={c} selected={schema.category === c} onPress={() => setCategory(c)} />
           ))}
         </View>
 
-        <ThemedText variant="heading">Style tags</ThemedText>
+        <ThemedText variant="label">On this piece ({tags.length})</ThemedText>
+        {tags.length === 0 ? (
+          <ThemedText variant="caption">
+            No style tags yet — add the ones that fit from the list below.
+          </ThemedText>
+        ) : (
+          <View style={styles.chips}>
+            {tags.map((tag) => (
+              <Chip
+                key={tag}
+                small
+                selected
+                label={`${tag.replace(/-/g, ' ')}  ✕`}
+                onPress={() => toggleTag(tag)}
+              />
+            ))}
+          </View>
+        )}
         <ThemedText variant="caption">
-          These drive outfit scoring. Tap to correct — your fixes make the stylist smarter.
+          These drive outfit scoring. Tap ✕ to remove — your fixes make the stylist smarter.
         </ThemedText>
+
+        <ThemedText variant="label">Add a tag</ThemedText>
         <View style={styles.chips}>
-          {ALL_TAGS.map((tag) => (
-            <Chip
-              key={tag}
-              small
-              label={tag.replace(/-/g, ' ')}
-              selected={tags.includes(tag)}
-              onPress={() => toggleTag(tag)}
-            />
+          {availableTags.map((tag) => (
+            <Chip key={tag} small label={tag.replace(/-/g, ' ')} onPress={() => toggleTag(tag)} />
           ))}
         </View>
 
@@ -219,6 +266,7 @@ export default function ScanScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
   preview: { width: '100%', height: 280, borderRadius: Radius.lg },
+  taggingPreview: { width: 180, height: 220, borderRadius: Radius.lg },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   sampleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   sampleItem: { width: '30%', minWidth: 96 },

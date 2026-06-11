@@ -14,9 +14,18 @@ import { useTheme } from '@/hooks/use-theme';
 import { useGenerationStore } from '@/lib/generationStore';
 import { useGarments, useSaveOutfit } from '@/lib/queries';
 import { sampleImageSource } from '@/lib/sampleImages';
+import { RequireSession } from '@/lib/session';
 import { styleName } from '@/lib/styleLibrary';
 
 export default function OutfitDetailScreen() {
+  return (
+    <RequireSession>
+      <OutfitDetail />
+    </RequireSession>
+  );
+}
+
+function OutfitDetail() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -10,9 +10,18 @@ import { useTheme } from '@/hooks/use-theme';
 import { useDeleteGarment, useGarments, useUpdateGarment } from '@/lib/queries';
 import { sampleImageSource } from '@/lib/sampleImages';
 import { classifyGarment } from '@/lib/scoring';
+import { RequireSession } from '@/lib/session';
 import { ALL_TAGS, styleName } from '@/lib/styleLibrary';
 
 export default function GarmentDetailScreen() {
+  return (
+    <RequireSession>
+      <GarmentDetail />
+    </RequireSession>
+  );
+}
+
+function GarmentDetail() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();

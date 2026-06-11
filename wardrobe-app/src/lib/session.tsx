@@ -4,6 +4,7 @@
  * whole core loop (scan → generate → gaps) works offline.
  */
 import type { Session } from '@supabase/supabase-js';
+import { Redirect } from 'expo-router';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -126,6 +127,18 @@ export function useSession(): SessionContextValue {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error('useSession must be used inside SessionProvider');
   return ctx;
+}
+
+/**
+ * Guard for screens outside the (tabs) group (scan, garment, outfit): waits
+ * out the async session restore on cold loads instead of crashing, and
+ * redirects signed-out users to login.
+ */
+export function RequireSession({ children }: { children: ReactNode }) {
+  const { user, loading } = useSession();
+  if (loading) return null;
+  if (!user) return <Redirect href="/login" />;
+  return <>{children}</>;
 }
 
 /** Backend is guaranteed inside the signed-in (tabs) group. */
