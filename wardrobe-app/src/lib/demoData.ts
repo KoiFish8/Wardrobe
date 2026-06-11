@@ -18,7 +18,7 @@ export function sampleGarments(): Garment[] {
     return {
       ...schema,
       id: item_id,
-      imageUri: null,
+      imageUri: `sample://${item_id}`,
       tags: deriveLibraryTags(schema),
       createdAt: new Date().toISOString(),
     };
