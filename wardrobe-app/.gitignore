@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# env — real secrets never committed (.env.example is)
+.env
+.env.*
+!.env.example
+
+# native folders (managed workflow — generated)
+/ios
+/android
+
+# misc
+.DS_Store
+*.tsbuildinfo
+npm-debug.*
