@@ -40,6 +40,8 @@ export interface Garment extends GarmentSchema {
   createdAt: string;
   /** True when the user edited the model's tags (corrections are training data). */
   userCorrected?: boolean;
+  /** Heart/favorite flag on the individual piece — biases outfit recommendations. */
+  favorite?: boolean;
 }
 
 export interface Outfit {
@@ -83,4 +85,10 @@ export interface SavedOutfit {
   score: number;
   why: string;
   createdAt: string;
+  /** Heart/favorite flag — off by default, toggled independently of saving. */
+  favorite?: boolean;
+  /** How many times "Wear This" was tapped — powers most-worn sorting. */
+  wornCount?: number;
+  /** Soft-delete timestamp; non-null means it's in the trash, recoverable. */
+  deletedAt?: string | null;
 }

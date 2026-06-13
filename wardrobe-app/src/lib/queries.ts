@@ -73,6 +73,60 @@ export function useSaveOutfit() {
   });
 }
 
+export function useDeletedOutfits() {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: ['deletedOutfits', backend.kind],
+    queryFn: () => backend.listDeletedOutfits(),
+  });
+}
+
+export function useUpdateSavedOutfit() {
+  const backend = useBackend();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<SavedOutfit> }) =>
+      backend.updateSavedOutfit(id, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['savedOutfits'] }),
+  });
+}
+
+/** Soft delete → moves an outfit to the trash. */
+export function useDeleteSavedOutfit() {
+  const backend = useBackend();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => backend.deleteSavedOutfit(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['savedOutfits'] });
+      qc.invalidateQueries({ queryKey: ['deletedOutfits'] });
+    },
+  });
+}
+
+/** Restore a trashed outfit (clears deletedAt). */
+export function useRestoreSavedOutfit() {
+  const backend = useBackend();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => backend.updateSavedOutfit(id, { deletedAt: null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['savedOutfits'] });
+      qc.invalidateQueries({ queryKey: ['deletedOutfits'] });
+    },
+  });
+}
+
+/** Permanently remove a trashed outfit. */
+export function usePurgeSavedOutfit() {
+  const backend = useBackend();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => backend.purgeSavedOutfit(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['deletedOutfits'] }),
+  });
+}
+
 export function useSetPreferredStyles() {
   const backend = useBackend();
   const qc = useQueryClient();

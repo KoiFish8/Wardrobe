@@ -33,7 +33,10 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}>
-        <ThemedText variant="title">Wardrobe Stylist</ThemedText>
+        <ThemedText variant="overline">Wardrobe Stylist</ThemedText>
+        <ThemedText variant="display" style={{ fontSize: 52, lineHeight: 56, marginTop: 10 }}>
+          Capsule
+        </ThemedText>
         <ThemedText variant="caption" style={{ marginTop: Spacing.two }}>
           Wear what you own. Buy less, better.
         </ThemedText>
@@ -47,7 +50,7 @@ export default function LoginScreen() {
             value={email}
             onChangeText={setEmail}
             editable={supabaseConfigured}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
           <TextInput
             placeholder="Password"
@@ -56,7 +59,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             editable={supabaseConfigured}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
           {error ? (
             <ThemedText variant="caption" color={theme.danger}>
@@ -90,5 +93,5 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: Spacing.five, maxWidth: 480, width: '100%', alignSelf: 'center' },
-  input: { borderRadius: Radius.md, paddingHorizontal: Spacing.three, paddingVertical: 13, fontSize: 15 },
+  input: { borderRadius: Radius.md, paddingHorizontal: Spacing.three, paddingVertical: 13, fontSize: 14.5 },
 });

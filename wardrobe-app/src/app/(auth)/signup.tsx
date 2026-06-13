@@ -34,7 +34,7 @@ export default function SignupScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}>
-        <ThemedText variant="title">Create account</ThemedText>
+        <ThemedText variant="display" style={{ fontSize: 38 }}>Create account</ThemedText>
         <ThemedText variant="caption" style={{ marginTop: Spacing.two }}>
           Scan your closet once — get outfits forever.
         </ThemedText>
@@ -47,7 +47,7 @@ export default function SignupScreen() {
             keyboardType="email-address"
             value={email}
             onChangeText={setEmail}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
           <TextInput
             placeholder="Password (8+ characters)"
@@ -55,7 +55,7 @@ export default function SignupScreen() {
             secureTextEntry
             value={password}
             onChangeText={setPassword}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
           {error ? (
             <ThemedText variant="caption" color={theme.danger}>

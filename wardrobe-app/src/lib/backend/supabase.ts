@@ -25,6 +25,7 @@ interface GarmentRow {
   confidence: Garment['confidence'];
   tags: string[] | null;
   user_corrected: boolean | null;
+  favorite: boolean | null;
   created_at: string;
 }
 
@@ -45,6 +46,7 @@ function rowToGarment(row: GarmentRow): Garment {
     confidence: row.confidence,
     tags: row.tags ?? [],
     userCorrected: row.user_corrected ?? false,
+    favorite: row.favorite ?? false,
     createdAt: row.created_at,
   };
 }
@@ -65,6 +67,7 @@ function garmentToRow(g: Partial<Garment> & { userId?: string }): Record<string,
   if (g.confidence !== undefined) row.confidence = g.confidence;
   if (g.tags !== undefined) row.tags = g.tags;
   if (g.userCorrected !== undefined) row.user_corrected = g.userCorrected;
+  if (g.favorite !== undefined) row.favorite = g.favorite;
   return row;
 }
 
@@ -135,23 +138,56 @@ export class SupabaseBackend implements WardrobeBackend {
     throw new Error('Subscription tier is managed by the payment provider.');
   }
 
-  async listSavedOutfits(): Promise<SavedOutfit[]> {
-    const { data, error } = await this.client
-      .from('saved_outfits')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data.map((row) => ({
+  private rowToSavedOutfit(row: any): SavedOutfit {
+    return {
       id: row.id,
       targetStyle: row.target_style as StyleId,
       garmentIds: (row.garment_ids ?? []) as string[],
       score: Number(row.score),
       why: row.why ?? '',
       createdAt: row.created_at,
-    }));
+      favorite: row.favorite ?? false,
+      wornCount: row.worn_count ?? 0,
+      deletedAt: row.deleted_at ?? null,
+    };
+  }
+
+  async listSavedOutfits(): Promise<SavedOutfit[]> {
+    const { data, error } = await this.client
+      .from('saved_outfits')
+      .select('*')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data.map((row) => this.rowToSavedOutfit(row));
+  }
+
+  async listDeletedOutfits(): Promise<SavedOutfit[]> {
+    const { data, error } = await this.client
+      .from('saved_outfits')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    if (error) throw error;
+    return data.map((row) => this.rowToSavedOutfit(row));
   }
 
   async saveOutfit(outfit: Omit<SavedOutfit, 'id' | 'createdAt'>): Promise<SavedOutfit> {
+    // Prevent duplicate outfits: same set of pieces is never saved twice. If a
+    // matching look exists (incl. trashed), reuse/restore it instead of inserting.
+    const key = [...outfit.garmentIds].sort().join('+');
+    const { data: all } = await this.client
+      .from('saved_outfits')
+      .select('*')
+      .eq('user_id', this.userId);
+    const dup = (all ?? []).find(
+      (row) => [...((row.garment_ids ?? []) as string[])].sort().join('+') === key
+    );
+    if (dup) {
+      return dup.deleted_at
+        ? this.updateSavedOutfit(dup.id, { deletedAt: null })
+        : this.rowToSavedOutfit(dup);
+    }
     const { data, error } = await this.client
       .from('saved_outfits')
       .insert({
@@ -160,21 +196,40 @@ export class SupabaseBackend implements WardrobeBackend {
         garment_ids: outfit.garmentIds,
         score: outfit.score,
         why: outfit.why,
+        favorite: outfit.favorite ?? false,
+        worn_count: outfit.wornCount ?? 0,
       })
       .select()
       .single();
     if (error) throw error;
-    return {
-      id: data.id,
-      targetStyle: data.target_style,
-      garmentIds: data.garment_ids ?? [],
-      score: Number(data.score),
-      why: data.why ?? '',
-      createdAt: data.created_at,
-    };
+    return this.rowToSavedOutfit(data);
   }
 
+  async updateSavedOutfit(id: string, patch: Partial<SavedOutfit>): Promise<SavedOutfit> {
+    const row: Record<string, unknown> = {};
+    if (patch.favorite !== undefined) row.favorite = patch.favorite;
+    if (patch.wornCount !== undefined) row.worn_count = patch.wornCount;
+    if (patch.deletedAt !== undefined) row.deleted_at = patch.deletedAt;
+    const { data, error } = await this.client
+      .from('saved_outfits')
+      .update(row)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return this.rowToSavedOutfit(data);
+  }
+
+  /** Soft delete — sets deleted_at so the outfit can be recovered from trash. */
   async deleteSavedOutfit(id: string): Promise<void> {
+    const { error } = await this.client
+      .from('saved_outfits')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async purgeSavedOutfit(id: string): Promise<void> {
     const { error } = await this.client.from('saved_outfits').delete().eq('id', id);
     if (error) throw error;
   }

@@ -87,6 +87,7 @@ Provide a .env.example and a README section listing exactly what I need to paste
 6. Gap analysis screen.
 7. Stripe payments + paywall + tier gating (behind the PaymentProvider interface).
 8. Profile/settings, polish, empty/loading/error states.
+9. (Optional add-on, after the above is working) "Scan a full outfit" — splits one outfit photo into individual tagged garments. Spec: `docs/11-outfit-photo-extraction-addon.md`. Introduces Gemini as a second model provider — flag before adding.
 
 ## CONSTRAINTS / HONEST NOTES
 - API keys NEVER in the client. All Anthropic/Stripe calls go through Edge Functions.

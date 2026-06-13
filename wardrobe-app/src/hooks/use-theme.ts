@@ -1,8 +1,6 @@
-import { useColorScheme } from 'react-native';
+import { Theme, type ThemeColors } from '@/constants/theme';
 
-import { Colors, type ThemeColors } from '@/constants/theme';
-
+/** Capsule is a light-only design — always the warm cream palette. */
 export function useTheme(): ThemeColors {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? Colors.dark : Colors.light;
+  return Theme;
 }

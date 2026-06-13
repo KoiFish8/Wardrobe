@@ -3,7 +3,9 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenHeader } from '@/components/screen-header';
 import { Button, Card, Chip, EmptyState, Loading, ThemedText } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,7 +39,14 @@ function GarmentDetail() {
   }, [garment, tags]);
 
   if (isLoading) return <Loading />;
-  if (!garment) return <EmptyState title="Garment not found" body="It may have been deleted." />;
+  if (!garment) {
+    return (
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScreenHeader title="Garment" />
+        <EmptyState title="Garment not found" body="It may have been deleted." />
+      </SafeAreaView>
+    );
+  }
 
   const currentTags = tags ?? garment.tags;
   const dirty = JSON.stringify(currentTags) !== JSON.stringify(garment.tags);
@@ -52,15 +61,17 @@ function GarmentDetail() {
   }
 
   return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <ScreenHeader title="Garment" />
     <ScrollView
       style={{ backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: Spacing.three, gap: Spacing.three }}>
+      contentContainerStyle={{ padding: 20, gap: Spacing.three, paddingBottom: 40 }}>
       {source ? (
-        <Image source={source} style={[styles.image, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
+        <Image source={source} style={[styles.image, { backgroundColor: theme.backgroundImage }]} contentFit="cover" transition={200} />
       ) : null}
 
-      <Card>
-        <ThemedText variant="heading">
+      <Card tone="beige">
+        <ThemedText variant="displaySmall" style={{ fontSize: 23 }}>
           {garment.primary_color} {garment.subtype}
         </ThemedText>
         <ThemedText variant="caption" style={{ marginTop: Spacing.one }}>
@@ -107,13 +118,18 @@ function GarmentDetail() {
         title="Delete garment"
         kind="danger"
         loading={deleteGarment.isPending}
-        onPress={() => deleteGarment.mutate(garment.id, { onSuccess: () => router.back() })}
+        onPress={() =>
+          deleteGarment.mutate(garment.id, {
+            onSuccess: () => (router.canGoBack() ? router.back() : router.replace('/wardrobe')),
+          })
+        }
       />
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  image: { width: '100%', height: 300, borderRadius: Radius.lg },
+  image: { width: '100%', height: 300, borderRadius: Radius.hero },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });

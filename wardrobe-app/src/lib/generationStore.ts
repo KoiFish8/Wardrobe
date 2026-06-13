@@ -4,26 +4,32 @@
  */
 import { create } from 'zustand';
 
-import type { Outfit, StyleId } from './types';
+import type { Outfit } from './types';
 
 interface GenerationState {
-  styleId: StyleId | null;
+  /** Occasion the last generation was for (design's generate flow), if any. */
+  occasionId: string | null;
   outfits: Record<string, Outfit>;
   ordered: string[];
-  setGeneration(styleId: StyleId, outfits: Outfit[]): void;
+  setGeneration(outfits: Outfit[], meta?: { occasionId?: string }): void;
+  /** Add a single outfit (e.g. a saved or daily look) without clobbering a generation. */
+  addOutfit(outfit: Outfit): void;
   getOutfit(id: string): Outfit | undefined;
 }
 
 export const useGenerationStore = create<GenerationState>((set, get) => ({
-  styleId: null,
+  occasionId: null,
   outfits: {},
   ordered: [],
-  setGeneration(styleId, outfits) {
+  setGeneration(outfits, meta) {
     set({
-      styleId,
+      occasionId: meta?.occasionId ?? null,
       outfits: Object.fromEntries(outfits.map((o) => [o.id, o])),
       ordered: outfits.map((o) => o.id),
     });
+  },
+  addOutfit(outfit) {
+    set((s) => ({ outfits: { ...s.outfits, [outfit.id]: outfit } }));
   },
   getOutfit(id) {
     return get().outfits[id];

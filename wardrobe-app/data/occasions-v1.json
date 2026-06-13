@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "_comment": "Maps the design's occasion picker to the 8 aesthetics in style-library-v1.json. Weights are taste, not ground truth — tune from accept/reject signal like the style weights.",
+  "occasions": {
+    "casual": {
+      "label": "Casual",
+      "subtitle": "Everyday looks",
+      "icon": "cafe-outline",
+      "styles": ["street", "minimal", "workwear", "y2kskate", "athleisure"]
+    },
+    "work": {
+      "label": "Work",
+      "subtitle": "Office & professional",
+      "icon": "briefcase-outline",
+      "styles": ["smartcasual", "minimal", "oldmoney"]
+    },
+    "date": {
+      "label": "Date Night",
+      "subtitle": "Dinner, drinks, etc.",
+      "icon": "heart-outline",
+      "styles": ["smartcasual", "minimal", "grunge"]
+    },
+    "event": {
+      "label": "Event",
+      "subtitle": "Parties, weddings, etc.",
+      "icon": "star-outline",
+      "styles": ["oldmoney", "smartcasual"]
+    },
+    "travel": {
+      "label": "Travel",
+      "subtitle": "Trips & vacation",
+      "icon": "airplane-outline",
+      "styles": ["athleisure", "minimal", "workwear"]
+    }
+  }
+}
