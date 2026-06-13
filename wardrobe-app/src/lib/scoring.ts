@@ -11,15 +11,70 @@
  * incompatible_pairs entirely.
  */
 import { STYLE_IDS, styleLibrary, styleName } from './styleLibrary';
+import type { LayerRole } from './styleLibrary';
 import type { Garment, GapCandidate, GapRecommendation, Outfit, StyleId } from './types';
 
+const cfg = styleLibrary.scoringConfig;
+
 /** An outfit with at least this style score counts as "strong" for gap analysis. */
-export const STRONG_OUTFIT_THRESHOLD = 8;
+export const STRONG_OUTFIT_THRESHOLD = cfg.strongOutfitThreshold;
 
 /** Ranked outfits below this fraction of the best score are buried. */
-const LOW_SCORE_FRACTION = 0.4;
+const LOW_SCORE_FRACTION = cfg.lowScoreFraction;
+
+/** A style only "owns" an outfit if it scores within this fraction of the outfit's best style. */
+const DOMINANCE_FRACTION = cfg.dominanceFraction;
+
+/** A tag is a "strong anchor" for a style when its weight is at least this. */
+const STRONG_WEIGHT = 2;
 
 const MAX_RANKED_OUTFITS = 20;
+
+/** True if any tag is a strong (S) anchor for this style — required for the outfit to count as that style. */
+function hasStrongAnchor(tags: Iterable<string>, styleId: StyleId): boolean {
+  for (const tag of tags) {
+    if ((styleLibrary.tagStyleWeights[tag]?.[styleId] ?? 0) >= STRONG_WEIGHT) return true;
+  }
+  return false;
+}
+
+const ROLE_PRIORITY: LayerRole[] = ['outer', 'mid', 'shirt', 'base'];
+
+/** Which top-half layer a garment occupies (from subtype, then category). Null = not a layerable top. */
+function layerRole(g: Garment): LayerRole | null {
+  if (g.category !== 'top' && g.category !== 'outerwear' && g.category !== 'dress') return null;
+  const s = (g.subtype || '').toLowerCase();
+  for (const role of ROLE_PRIORITY) {
+    if (styleLibrary.layering.roleKeywords[role]?.some((k) => s.includes(k))) return role;
+  }
+  return g.category === 'outerwear' ? 'outer' : 'base';
+}
+
+function layerRank(g: Garment): number {
+  const role = layerRole(g);
+  return role ? styleLibrary.layering.roleRank[role] ?? 0 : 0;
+}
+
+function formalityRank(g: Garment): number {
+  return styleLibrary.layering.formalityRank[g.formality] ?? 0;
+}
+
+const MID_RANK = styleLibrary.layering.roleRank.mid;
+
+/**
+ * Can `outer` sensibly be layered OVER `top`?
+ * - Outer must sit strictly above the top's layer (blocks two mids like sweater+hoodie, or two outers).
+ * - A much-more-formal outer can't go over a bulky MID layer (blocks a hoodie/sweatshirt under a blazer),
+ *   but is fine over a thin base or shirt (a tee or button-up under a blazer is allowed).
+ */
+export function canLayer(top: Garment, outer: Garment): boolean {
+  if (layerRank(outer) <= layerRank(top)) return false;
+  const formalityGap = Math.abs(formalityRank(outer) - formalityRank(top));
+  if (formalityGap > styleLibrary.layering.maxFormalityGap && layerRank(top) >= MID_RANK) {
+    return false;
+  }
+  return true;
+}
 
 /** Validated matrix + anti-affinity score for a set of tags against one style. */
 export function scoreTagsForStyle(tags: Iterable<string>, styleId: StyleId): number {
@@ -121,7 +176,22 @@ export function outfitId(styleId: StyleId, garmentIds: string[]): string {
 export function scoreOutfit(garments: Garment[], styleId: StyleId): Outfit | null {
   const pairs = pairwiseTags(garments);
   if (pairs.clash) return null; // hard clash — suppress entirely
-  const styleScore = scoreTagsForStyle(unionTags(garments), styleId);
+
+  const union = unionTags(garments);
+
+  // Realness gate 1: the outfit must have a strong (S) anchor tag for this style,
+  // otherwise it isn't really that style — just a generic combo that scores a few weak points.
+  if (cfg.requireStrongAnchor && !hasStrongAnchor(union, styleId)) return null;
+
+  const styleScore = scoreTagsForStyle(union, styleId);
+  if (styleScore <= 0) return null;
+
+  // Realness gate 2: only surface the outfit under a style it genuinely leans toward.
+  // If another style fits clearly better, don't show this outfit here — this is what
+  // stops the same outfit appearing under many styles (while still allowing true hybrids).
+  const bestScore = classifyTags(union)[0].score;
+  if (bestScore <= 0 || styleScore < DOMINANCE_FRACTION * bestScore) return null;
+
   const score = styleScore + pairs.bonus;
   return {
     id: outfitId(styleId, garments.map((g) => g.id)),
@@ -148,6 +218,7 @@ export function generateOutfits(
   const dresses = closet.filter((g) => g.category === 'dress');
   const outerwear = closet.filter((g) => g.category === 'outerwear');
   const shoes = closet.filter((g) => g.category === 'shoes');
+  const accessories = closet.filter((g) => g.category === 'accessory');
 
   const bases: Garment[][] = [];
   for (const top of tops) for (const bottom of bottoms) bases.push([top, bottom]);
@@ -162,7 +233,21 @@ export function generateOutfits(
     return out;
   };
 
-  const combos = withOptional(withOptional(bases, outerwear), shoes);
+  // Add outerwear only where it can sensibly be layered over the base top
+  // (no two mids, no two outers, no hoodie-under-blazer). See canLayer().
+  const basesWithOuter: Garment[][] = [];
+  for (const base of bases) {
+    basesWithOuter.push(base);
+    const topPiece = base.find((g) => g.category === 'top' || g.category === 'dress');
+    for (const outer of outerwear) {
+      if (!topPiece || canLayer(topPiece, outer)) basesWithOuter.push([...base, outer]);
+    }
+  }
+
+  // Outfits vary in size: a dress alone (1) up to top+bottom+outer+shoes+accessory (5).
+  // Shoes and an accessory are each optional layers; weather ranking later demotes
+  // heavier/layered combos when it's warm, so lighter 2–3 piece looks surface then.
+  const combos = withOptional(withOptional(basesWithOuter, shoes), accessories);
 
   const outfits: Outfit[] = [];
   for (const combo of combos) {
@@ -182,6 +267,52 @@ export function generateOutfits(
 /** Top style for a single garment or whole outfit (ties broken by STYLE_IDS order). */
 export function classifyGarment(garment: Garment): { styleId: StyleId; score: number } {
   return classifyTags(garment.tags)[0];
+}
+
+/**
+ * When 'minimal' wins but a more distinctive style is within this margin, the
+ * distinctive style takes the label — so neutral-heavy wardrobes don't collapse
+ * every look into "Clean Minimal".
+ */
+const MINIMAL_FALLBACK_MARGIN = 2;
+
+/**
+ * The single canonical style label for a tag set — its globally best style
+ * (across all 8 aesthetics, not a per-occasion subset), with 'minimal' treated
+ * as a fallback so labels stay varied.
+ */
+export function canonicalStyleId(tags: Iterable<string>): StyleId {
+  const ranked = classifyTags(tags);
+  const top = ranked[0];
+  if (!top || top.score <= 0) return top?.styleId ?? 'minimal';
+  if (top.styleId === 'minimal') {
+    const alt = ranked.find((r) => r.styleId !== 'minimal' && r.score > 0);
+    if (alt && alt.score >= top.score - MINIMAL_FALLBACK_MARGIN) return alt.styleId;
+  }
+  return top.styleId;
+}
+
+/**
+ * Re-describe an outfit under its canonical style, so the SAME garment
+ * combination always carries one stable id, label, score and "why" everywhere
+ * it appears — instead of being tagged differently per occasion/target style.
+ */
+export function canonicalizeOutfit(outfit: Outfit, garments: Garment[]): Outfit {
+  const pieces = garments.filter((g) => outfit.garmentIds.includes(g.id));
+  if (pieces.length === 0) return outfit;
+  const tags = unionTags(pieces);
+  const styleId = canonicalStyleId(tags);
+  const pairs = pairwiseTags(pieces);
+  const styleScore = scoreTagsForStyle(tags, styleId);
+  return {
+    ...outfit,
+    id: outfitId(styleId, outfit.garmentIds),
+    styleId,
+    styleScore,
+    compatBonus: pairs.bonus,
+    score: styleScore + pairs.bonus,
+    why: buildWhy(pieces, styleId, pairs),
+  };
 }
 
 function countStrongOutfits(closet: Garment[], styleId: StyleId): number {

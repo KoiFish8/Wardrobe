@@ -28,9 +28,16 @@ export interface WardrobeBackend {
   /** Direct tier set — used by the demo payment provider only. */
   setSubscriptionTier(tier: SubscriptionTier): Promise<Profile>;
 
+  /** Active (non-trashed) saved outfits. */
   listSavedOutfits(): Promise<SavedOutfit[]>;
+  /** Trashed (soft-deleted) outfits, for the Recently deleted screen. */
+  listDeletedOutfits(): Promise<SavedOutfit[]>;
   saveOutfit(outfit: Omit<SavedOutfit, 'id' | 'createdAt'>): Promise<SavedOutfit>;
+  updateSavedOutfit(id: string, patch: Partial<SavedOutfit>): Promise<SavedOutfit>;
+  /** Soft delete — moves to trash (recoverable). */
   deleteSavedOutfit(id: string): Promise<void>;
+  /** Permanent delete from the trash. */
+  purgeSavedOutfit(id: string): Promise<void>;
 
   /** Free-tier limit: 1 AI-style generation/day, enforced via event counting. */
   generationsToday(): Promise<number>;

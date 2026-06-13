@@ -86,19 +86,59 @@ export class LocalBackend implements WardrobeBackend {
     return next;
   }
 
-  async listSavedOutfits(): Promise<SavedOutfit[]> {
+  private async allSavedOutfits(): Promise<SavedOutfit[]> {
     return readJson<SavedOutfit[]>(KEYS.saved, []);
   }
 
+  async listSavedOutfits(): Promise<SavedOutfit[]> {
+    return (await this.allSavedOutfits()).filter((o) => !o.deletedAt);
+  }
+
+  async listDeletedOutfits(): Promise<SavedOutfit[]> {
+    return (await this.allSavedOutfits())
+      .filter((o) => o.deletedAt)
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
+  }
+
   async saveOutfit(outfit: Omit<SavedOutfit, 'id' | 'createdAt'>): Promise<SavedOutfit> {
-    const saved = await this.listSavedOutfits();
-    const created: SavedOutfit = { ...outfit, id: newId(), createdAt: new Date().toISOString() };
+    const saved = await this.allSavedOutfits();
+    // Prevent duplicate outfits: a look with the same set of pieces is never
+    // saved twice. If a matching one was trashed, restore it instead.
+    const key = [...outfit.garmentIds].sort().join('+');
+    const existing = saved.find((o) => [...o.garmentIds].sort().join('+') === key);
+    if (existing) {
+      return existing.deletedAt
+        ? this.updateSavedOutfit(existing.id, { deletedAt: null })
+        : existing;
+    }
+    const created: SavedOutfit = {
+      favorite: false,
+      wornCount: 0,
+      deletedAt: null,
+      ...outfit,
+      id: newId(),
+      createdAt: new Date().toISOString(),
+    };
     await writeJson(KEYS.saved, [created, ...saved]);
     return created;
   }
 
+  async updateSavedOutfit(id: string, patch: Partial<SavedOutfit>): Promise<SavedOutfit> {
+    const saved = await this.allSavedOutfits();
+    const idx = saved.findIndex((o) => o.id === id);
+    if (idx === -1) throw new Error(`Saved outfit not found: ${id}`);
+    saved[idx] = { ...saved[idx], ...patch, id };
+    await writeJson(KEYS.saved, saved);
+    return saved[idx];
+  }
+
+  /** Soft delete — flag with a timestamp so it can be recovered from the trash. */
   async deleteSavedOutfit(id: string): Promise<void> {
-    const saved = await this.listSavedOutfits();
+    await this.updateSavedOutfit(id, { deletedAt: new Date().toISOString() });
+  }
+
+  async purgeSavedOutfit(id: string): Promise<void> {
+    const saved = await this.allSavedOutfits();
     await writeJson(
       KEYS.saved,
       saved.filter((o) => o.id !== id)

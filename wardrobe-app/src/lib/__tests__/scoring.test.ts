@@ -4,6 +4,7 @@ import { sampleGarments } from '../demoData';
 import { GAP_CANDIDATES } from '../gapCandidates';
 import {
   STRONG_OUTFIT_THRESHOLD,
+  canLayer,
   classifyGarment,
   classifyTags,
   gapAnalysis,

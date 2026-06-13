@@ -15,6 +15,8 @@ Scan a closet (one garment at a time) → tag each piece → match those tags ag
 
 **Out of core (optional add-ons only):** multi-piece outfit tagging (parsing a full worn look), style-from-a-picture. Do not put these on the critical path.
 
+**Multi-piece outfit tagging is now spec'd** (was previously just a placeholder) — see `docs/11-outfit-photo-extraction-addon.md`. It introduces Gemini 2.5 Flash as a second model provider (for bounding-box detection, ~$0.0006/photo, already prototyped/validated). Build it AFTER the core loop, as its own phase.
+
 ## Key locked decisions
 
 - **No custom AI to start.** Rent vision models. Custom training only after thousands of user corrections.
@@ -59,4 +61,15 @@ The **outfit generator + gap-analysis pass**: take a tagged closet + `style-libr
 - `docs/07-style-library-v1.md` — built/validated library, changelog, limitations
 - `docs/08-tooling-workflow.md` — Cowork vs Code division of labor
 - `docs/09-claude-code-build-prompt.md` — the full Expo/React Native build spec (paste-ready)
+- `docs/11-outfit-photo-extraction-addon.md` — optional add-on: split a full-outfit photo into individual tagged/cutout garments
 - `archive/` — superseded drafts
+
+## MCP servers (`.mcp.json`)
+
+Project-scoped MCP servers, available to anyone working in this repo via Claude Code:
+
+- **supabase** — read-only schema/data inspection during development (project ref + access token)
+- **github** — repo/PR/issue access (personal access token)
+- **playwright** — browser automation for testing the Expo web build
+
+All required tokens are env vars (see `.env.example`) — never hardcoded in `.mcp.json`. Set them in your shell before launching Claude Code.

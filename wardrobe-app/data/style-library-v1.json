@@ -80,5 +80,24 @@
     "athletic-stripe":     { "oldmoney": -2, "smartcasual": -1, "minimal": -1 },
     "washed-faded":        { "oldmoney": -1 },
     "bright-bold":         { "oldmoney": -1, "minimal": -1 }
+  },
+  "scoring_config": {
+    "_comment": "Realness gates. require_strong_anchor: an outfit must contain >=1 tag with weight 2 (S) for a style to qualify as that style. dominance_fraction: only surface an outfit under a style whose score is at least this fraction of the outfit's best-fitting style — stops one outfit showing under many styles while still allowing genuine hybrids.",
+    "dominance_fraction": 0.8,
+    "require_strong_anchor": true,
+    "strong_outfit_threshold": 8,
+    "low_score_fraction": 0.4
+  },
+  "layering": {
+    "_comment": "Top-half layering rules. Role rank order: base < shirt < mid < outer. An outer piece may only sit OVER a strictly lower layer — never beside an equal one (blocks two mids like sweater+hoodie, or two outers). Pieces layered together must be within max_formality_gap (blocks e.g. a hoodie under a blazer). Role is matched from the garment subtype first (checked outer->mid->shirt->base), then falls back to category.",
+    "role_keywords": {
+      "outer": ["jacket", "coat", "blazer", "bomber", "parka", "puffer", "trench", "overcoat", "peacoat", "windbreaker", "mac", "gilet", "vest", "anorak"],
+      "mid": ["sweater", "hoodie", "sweatshirt", "knit", "cardigan", "crewneck", "pullover", "overshirt", "fleece", "turtleneck", "jumper", "zip-up", "quarter-zip"],
+      "shirt": ["button-up", "button down", "button-down", "oxford", "flannel", "polo", "shirt"],
+      "base": ["t-shirt", "tee", "tank", "long-sleeve", "henley", "camisole", "base layer", "base"]
+    },
+    "role_rank": { "base": 0, "shirt": 1, "mid": 2, "outer": 3 },
+    "formality_rank": { "casual": 0, "smart-casual": 1, "formal": 2 },
+    "max_formality_gap": 1
   }
 }

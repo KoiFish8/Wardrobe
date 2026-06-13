@@ -81,10 +81,14 @@ create table public.saved_outfits (
   garment_ids jsonb not null default '[]',
   score numeric not null default 0,
   why text,
+  favorite boolean not null default false,
+  worn_count integer not null default 0,
+  deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 create index saved_outfits_user_id_idx on public.saved_outfits (user_id, created_at desc);
+create index saved_outfits_active_idx on public.saved_outfits (user_id, deleted_at);
 
 alter table public.saved_outfits enable row level security;
 
