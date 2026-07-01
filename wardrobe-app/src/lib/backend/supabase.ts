@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { sampleGarments } from '../demoData';
 import type { Garment, GarmentSchema, Profile, SavedOutfit, StyleId, SubscriptionTier } from '../types';
-import type { NewGarment, TagImageInput, WardrobeBackend } from './types';
+import type { AssistantMessage, AssistantReply, NewGarment, TagImageInput, WardrobeBackend } from './types';
 
 interface GarmentRow {
   id: string;
@@ -26,6 +26,7 @@ interface GarmentRow {
   tags: string[] | null;
   user_corrected: boolean | null;
   favorite: boolean | null;
+  cutout_uri: string | null;
   created_at: string;
 }
 
@@ -33,6 +34,7 @@ function rowToGarment(row: GarmentRow): Garment {
   return {
     id: row.id,
     imageUri: row.image_url,
+    cutoutUri: row.cutout_uri ?? null,
     category: row.category,
     subtype: row.subtype,
     primary_color: row.primary_color,
@@ -54,6 +56,7 @@ function rowToGarment(row: GarmentRow): Garment {
 function garmentToRow(g: Partial<Garment> & { userId?: string }): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   if (g.imageUri !== undefined) row.image_url = g.imageUri;
+  if (g.cutoutUri !== undefined) row.cutout_uri = g.cutoutUri;
   if (g.category !== undefined) row.category = g.category;
   if (g.subtype !== undefined) row.subtype = g.subtype;
   if (g.primary_color !== undefined) row.primary_color = g.primary_color;
@@ -258,6 +261,25 @@ export class SupabaseBackend implements WardrobeBackend {
     });
     if (error) throw error;
     return data as GarmentSchema;
+  }
+
+  async cropGarment(input: { base64: string; mimeType?: string }): Promise<string | null> {
+    const { data, error } = await this.client.functions.invoke('crop-garment', {
+      body: { image_base64: input.base64, mime_type: input.mimeType ?? 'image/jpeg', cutout: true },
+    });
+    if (error) throw error;
+    if (!data?.image_base64) return null;
+    return `data:${data.mime_type ?? 'image/png'};base64,${data.image_base64}`;
+  }
+
+  async askAssistant(input: { messages: AssistantMessage[]; context: string }): Promise<AssistantReply> {
+    const { data, error } = await this.client.functions.invoke('style-assistant', {
+      body: { messages: input.messages, context: input.context },
+    });
+    if (error) {
+      return { reply: '', error: 'Couldn’t reach the stylist just now — try again in a moment.' };
+    }
+    return data as AssistantReply;
   }
 
   async importSampleWardrobe(): Promise<Garment[]> {

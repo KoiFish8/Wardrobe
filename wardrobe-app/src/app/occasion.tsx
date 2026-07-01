@@ -7,7 +7,7 @@
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -19,6 +19,7 @@ import { Radius } from '@/constants/theme';
 import { useReplayKey } from '@/hooks/use-replay-key';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeather } from '@/hooks/use-weather';
+import { useCollectionsStore } from '@/lib/collectionsStore';
 import { useGenerationStore } from '@/lib/generationStore';
 import {
   achievableOccasions,
@@ -53,12 +54,23 @@ function OccasionPicker() {
   const unit = useTempUnit();
   const { data: generationsToday, refetch: refetchGenerations } = useGenerationsToday();
   const setGeneration = useGenerationStore((s) => s.setGeneration);
+  const { collection: collectionId } = useLocalSearchParams<{ collection?: string }>();
+  const collections = useCollectionsStore((s) => s.collections);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const closet = useMemo(() => garments ?? [], [garments]);
+  // When launched from a collection, only build outfits from that subset.
+  const activeCollection = collectionId
+    ? collections.find((c) => c.id === collectionId)
+    : undefined;
+  const closet = useMemo(() => {
+    const all = garments ?? [];
+    if (!activeCollection) return all;
+    const ids = new Set(activeCollection.garmentIds);
+    return all.filter((g) => ids.has(g.id));
+  }, [garments, activeCollection]);
   const tier = profile?.subscriptionTier ?? 'free';
 
   // Dress for the weather: live temp → season, else fall back to the calendar.
@@ -127,7 +139,9 @@ function OccasionPicker() {
         <View style={{ paddingHorizontal: 24, paddingTop: 14 }}>
           <ThemedText variant="display">What's the occasion?</ThemedText>
           <ThemedText variant="body" color={theme.textSecondary} style={{ marginTop: 12, fontSize: 14 }}>
-            Tell the stylist and it builds a look from your closet.
+            {activeCollection
+              ? `Building looks only from "${activeCollection.name}" (${closet.length} pieces).`
+              : 'Tell the stylist and it builds a look from your closet.'}
           </ThemedText>
           {available.length > 0 ? (
             <View style={[styles.weatherChip, { backgroundColor: theme.backgroundElement }]}>

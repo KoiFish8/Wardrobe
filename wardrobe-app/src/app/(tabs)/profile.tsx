@@ -71,7 +71,7 @@ export default function ProfileScreen() {
   const preferred = profile?.preferredStyles ?? [];
   const closet = useMemo(() => garments ?? [], [garments]);
 
-  const name = user?.isDemo ? 'Alex' : (user?.email?.split('@')[0] ?? 'there');
+  const name = user?.username ?? (user?.isDemo ? 'Alex' : (user?.email?.split('@')[0] ?? 'there'));
   const displayName = name.charAt(0).toUpperCase() + name.slice(1);
 
   const categoryCount = new Set(closet.map((g) => g.category)).size;

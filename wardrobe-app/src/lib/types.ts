@@ -35,6 +35,8 @@ export interface GarmentSchema {
 export interface Garment extends GarmentSchema {
   id: string;
   imageUri: string | null;
+  /** Background-removed cutout (from the crop-garment pipeline) — used by the whiteboard thumbnail. */
+  cutoutUri?: string | null;
   /** Normalized tags drawn from the style library vocabulary — what scoring uses. */
   tags: string[];
   createdAt: string;

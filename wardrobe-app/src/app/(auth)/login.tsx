@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, ThemedText } from '@/components/ui';
+import { PasswordInput } from '@/components/password-input';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/session';
@@ -52,14 +53,10 @@ export default function LoginScreen() {
             editable={supabaseConfigured}
             style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor={theme.textSecondary}
-            secureTextEntry
+          <PasswordInput
             value={password}
             onChangeText={setPassword}
             editable={supabaseConfigured}
-            style={[styles.input, { backgroundColor: theme.backgroundInput, color: theme.text }]}
           />
           {error ? (
             <ThemedText variant="caption" color={theme.danger}>

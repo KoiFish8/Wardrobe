@@ -10,8 +10,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ import { Fonts, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeather } from '@/hooks/use-weather';
 import { scoreManualOutfit } from '@/lib/outfitHelpers';
+import { useCollectionsStore } from '@/lib/collectionsStore';
 import { useGarments, useSaveOutfit } from '@/lib/queries';
 import { sampleImageSource } from '@/lib/sampleImages';
 import { RequireSession } from '@/lib/session';
@@ -53,7 +54,20 @@ function Builder() {
   const { data: garments } = useGarments();
   const { data: weather } = useWeather();
   const saveOutfit = useSaveOutfit();
-  const closet = useMemo(() => garments ?? [], [garments]);
+  const { collection: collectionId } = useLocalSearchParams<{ collection?: string }>();
+  const collections = useCollectionsStore((s) => s.collections);
+  const hydrateCollections = useCollectionsStore((s) => s.hydrate);
+  useEffect(() => {
+    hydrateCollections();
+  }, [hydrateCollections]);
+  const activeCollection = collectionId ? collections.find((c) => c.id === collectionId) : undefined;
+  // Scope the buildable pieces to the chosen folder, if any.
+  const closet = useMemo(() => {
+    const all = garments ?? [];
+    if (!activeCollection) return all;
+    const ids = new Set(activeCollection.garmentIds);
+    return all.filter((g) => ids.has(g.id));
+  }, [garments, activeCollection]);
 
   const [layout, setLayout] = useState<Layout>('sections');
   const [selected, setSelected] = useState<Partial<Record<Category, string>>>({});

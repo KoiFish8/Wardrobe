@@ -23,6 +23,8 @@ import { Button, Chip, PressScale, ThemedText } from '@/components/ui';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useReplayKey } from '@/hooks/use-replay-key';
 import { useTheme } from '@/hooks/use-theme';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { compressImage } from '@/lib/imageCompression';
 import { useAddGarment, useProfile } from '@/lib/queries';
 import { SAMPLE_IMAGES } from '@/lib/sampleImages';
@@ -64,6 +66,7 @@ function ScanFlow() {
   const router = useRouter();
   const backend = useBackend();
   const addGarment = useAddGarment();
+  const qc = useQueryClient();
   const { data: profile } = useProfile();
   const replay = useReplayKey();
 
@@ -73,6 +76,7 @@ function ScanFlow() {
   const [phase, setPhase] = useState<Phase>('pick');
   const [mode, setMode] = useState<Mode>('single');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [base64, setBase64] = useState<string | null>(null);
   const [sampleId, setSampleId] = useState<string | null>(null);
   const [schema, setSchema] = useState<GarmentSchema | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -106,17 +110,20 @@ function ScanFlow() {
     setPhase('tagging'); // show the spinner during compression too
     // Compress before tagging/storage — smaller upload, fewer vision tokens.
     const compressed = await compressImage(result.assets[0].uri, { withBase64: true });
+    setBase64(compressed.base64 ?? null);
     await runTagging({ base64: compressed.base64 }, compressed.uri);
   }
 
   async function useSample(id: string) {
     setSampleId(id);
+    setBase64(null);
     await runTagging({ sampleId: id }, null);
   }
 
   function addManually() {
     setSampleId(null);
     setImageUri(null);
+    setBase64(null);
     setSchema(MANUAL_SCHEMA);
     setTags([]);
     setEdited(true);
@@ -136,13 +143,26 @@ function ScanFlow() {
   async function save() {
     if (!schema) return;
     try {
-      await addGarment.mutateAsync({
+      const created = await addGarment.mutateAsync({
         ...schema,
         // sample:// URIs resolve to the bundled JPEG previews on any backend
         imageUri: imageUri ?? (sampleId ? `sample://${sampleId}` : null),
         tags,
         userCorrected: edited,
       });
+      // Fire the AI cutout in the background — never blocks the save or
+      // navigation, and fails silently (e.g. Gemini billing not enabled). The
+      // whiteboard thumbnail picks up the cutout on the next garments refetch.
+      if (base64) {
+        const photo = base64;
+        backend
+          .cropGarment({ base64: photo, mimeType: 'image/jpeg' })
+          .then((cutoutUri) =>
+            cutoutUri ? backend.updateGarment(created.id, { cutoutUri }) : null
+          )
+          .then(() => qc.invalidateQueries({ queryKey: ['garments'] }))
+          .catch(() => {});
+      }
       if (router.canGoBack()) router.back();
       else router.replace('/wardrobe');
     } catch (e) {

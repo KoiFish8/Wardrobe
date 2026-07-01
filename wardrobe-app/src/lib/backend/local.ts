@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { SAMPLE_IDS, sampleGarments, sampleSchemaById } from '../demoData';
 import type { Garment, GarmentSchema, Profile, SavedOutfit, StyleId, SubscriptionTier } from '../types';
-import type { NewGarment, TagImageInput, WardrobeBackend } from './types';
+import type { AssistantMessage, AssistantReply, NewGarment, TagImageInput, WardrobeBackend } from './types';
 
 const KEYS = {
   garments: 'demo.garments.v1',
@@ -183,6 +183,26 @@ export class LocalBackend implements WardrobeBackend {
       neutral: false,
       confidence: 'low',
       note: 'Demo mode: connect Supabase + Anthropic to tag real photos. Edit the tags below.',
+    };
+  }
+
+  async cropGarment(): Promise<string | null> {
+    // Demo mode has no AI image pipeline — pieces keep their original photo.
+    return null;
+  }
+
+  async askAssistant(input: { messages: AssistantMessage[]; context: string }): Promise<AssistantReply> {
+    // Demo mode has no live model — return a friendly canned reply so the chat
+    // is still explorable offline.
+    await new Promise((r) => setTimeout(r, 500));
+    const last = [...input.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+    return {
+      reply:
+        `This is the demo stylist — I can't think live without a connected Pro account, but here's the idea: ` +
+        `ask me things like “what do I wear today?”, “pack me 4 days for a trip”, or “what's missing from my closet?”, ` +
+        `and I'll build answers from your real wardrobe.` +
+        (last ? `\n\n(You asked: “${last.slice(0, 80)}”.)` : ''),
+      remaining: 30,
     };
   }
 

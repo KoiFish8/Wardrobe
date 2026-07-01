@@ -10,7 +10,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card, Chip, EmptyState, Loading, ThemedText } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, Loading, PressScale, ThemedText } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useReplayKey } from '@/hooks/use-replay-key';
 import { useTheme } from '@/hooks/use-theme';
@@ -57,14 +57,46 @@ export default function GapsScreen() {
           body="Gap analysis simulates every candidate purchase against your real closet and ranks them by new outfits unlocked — so you buy less, better. A Pro feature."
           action={<Button title="Upgrade to Pro" onPress={() => router.push('/profile')} />}
         />
-      ) : closet.length === 0 ? (
-        <EmptyState
-          title="Scan your closet first"
-          body="Gap analysis compares candidate purchases against your real wardrobe."
-          action={<Button title="Scan a garment" kind="secondary" onPress={() => router.push('/scan')} />}
-        />
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 6, gap: Spacing.three }}>
+          {/* Compare items — buy-or-toss decisions */}
+          <PressScale onPress={() => router.push('/compare' as any)} style={[styles.compareCard, { backgroundColor: theme.accent }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={[styles.compareIcon, { backgroundColor: 'rgba(251,250,247,0.14)' }]}>
+                <Ionicons name="git-compare-outline" size={22} color={theme.accentText} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText variant="heading" color={theme.accentText} style={{ fontSize: 15 }}>
+                  Compare items
+                </ThemedText>
+                <ThemedText variant="caption" color="#b8b1a6" style={{ fontSize: 12, marginTop: 2 }}>
+                  Buy or toss? Weigh 2+ pieces side by side.
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#b8b1a6" />
+            </View>
+          </PressScale>
+
+          {closet.length === 0 ? (
+            <Card>
+              <ThemedText variant="heading">Scan your closet for gap analysis</ThemedText>
+              <ThemedText variant="caption" style={{ marginTop: Spacing.two, lineHeight: 18 }}>
+                Gap analysis compares candidate purchases against your real wardrobe. Compare items
+                above works without a closet — handy for two things you're deciding between in a store.
+              </ThemedText>
+              <Button title="Scan a garment" kind="secondary" onPress={() => router.push('/scan')} style={{ marginTop: Spacing.three }} />
+            </Card>
+          ) : (
+          <>
+          <Card tone="beige">
+            <ThemedText variant="label">Wardrobe note</ThemedText>
+            <ThemedText variant="body" style={{ marginTop: Spacing.one, fontSize: 13.5, lineHeight: 20 }}>
+              {neutralShare >= 80
+                ? `${neutralShare}% of your closet is neutrals — highly mixable, but one accent or texture piece would add range.`
+                : `${neutralShare}% of your closet is neutrals. Neutrals multiply outfit options in a small wardrobe.`}
+            </ThemedText>
+          </Card>
+
           <ThemedText variant="caption">Target style</ThemedText>
           <View style={styles.chips}>
             {STYLE_IDS.map((id) => (
@@ -103,15 +135,8 @@ export default function GapsScreen() {
               </Animated.View>
             ))
           )}
-
-          <Card tone="beige">
-            <ThemedText variant="label">Wardrobe note</ThemedText>
-            <ThemedText variant="body" style={{ marginTop: Spacing.one, fontSize: 13.5, lineHeight: 20 }}>
-              {neutralShare >= 80
-                ? `${neutralShare}% of your closet is neutrals — highly mixable, but one accent or texture piece would add range.`
-                : `${neutralShare}% of your closet is neutrals. Neutrals multiply outfit options in a small wardrobe.`}
-            </ThemedText>
-          </Card>
+          </>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -128,4 +153,6 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  compareCard: { borderRadius: 18, padding: 16 },
+  compareIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

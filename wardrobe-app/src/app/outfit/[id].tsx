@@ -12,7 +12,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { OutfitCollage } from '@/components/outfit-collage';
+import { OutfitWhiteboard } from '@/components/outfit-whiteboard';
 import { ScreenHeader } from '@/components/screen-header';
 import { showToast } from '@/components/toast';
 import { Button, EmptyState, Loading, PressScale, ThemedText } from '@/components/ui';
@@ -157,7 +157,7 @@ function OutfitDetail() {
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(380)} style={styles.hero}>
-          <OutfitCollage pieces={pieces} height={360} />
+          <OutfitWhiteboard pieces={pieces} height={360} />
         </Animated.View>
 
         <View style={styles.titleRow}>

@@ -23,6 +23,8 @@ const DEMO_SESSION_KEY = 'demo.session.v1';
 export interface AppUser {
   id: string;
   email: string | null;
+  /** Chosen at sign-up, stored in auth user metadata. */
+  username: string | null;
   isDemo: boolean;
 }
 
@@ -33,7 +35,7 @@ interface SessionContextValue {
   payments: PaymentProvider | null;
   supabaseConfigured: boolean;
   signIn(email: string, password: string): Promise<void>;
-  signUp(email: string, password: string): Promise<void>;
+  signUp(email: string, password: string, username: string): Promise<void>;
   enterDemo(): Promise<void>;
   signOut(): Promise<void>;
 }
@@ -58,7 +60,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       const demo = await AsyncStorage.getItem(DEMO_SESSION_KEY);
       if (active) {
-        if (demo) setUser({ id: 'demo-user', email: null, isDemo: true });
+        if (demo) setUser({ id: 'demo-user', email: null, username: null, isDemo: true });
         setLoading(false);
       }
     }
@@ -97,14 +99,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
-    async signUp(email, password) {
+    async signUp(email, password, username) {
       if (!supabase) throw new Error('Supabase is not configured — use demo mode.');
-      const { error } = await supabase.auth.signUp({ email, password });
+      // Username goes into auth user metadata; the handle_new_user trigger copies
+      // it into the profiles row (see migration 0004).
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { username: username.trim() } },
+      });
       if (error) throw error;
     },
     async enterDemo() {
       await AsyncStorage.setItem(DEMO_SESSION_KEY, '1');
-      setUser({ id: 'demo-user', email: null, isDemo: true });
+      setUser({ id: 'demo-user', email: null, username: null, isDemo: true });
     },
     async signOut() {
       if (user?.isDemo) {
@@ -120,7 +128,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 }
 
 function sessionToUser(session: Session): AppUser {
-  return { id: session.user.id, email: session.user.email ?? null, isDemo: false };
+  const username = (session.user.user_metadata?.username as string | undefined) ?? null;
+  return { id: session.user.id, email: session.user.email ?? null, username, isDemo: false };
 }
 
 export function useSession(): SessionContextValue {

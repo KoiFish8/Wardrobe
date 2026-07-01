@@ -12,9 +12,10 @@ import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 're
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { OutfitCollage } from '@/components/outfit-collage';
+import { OutfitWhiteboard } from '@/components/outfit-whiteboard';
 import { showToast } from '@/components/toast';
 import { Button, Chip, EmptyState, Loading, PressScale, ThemedText } from '@/components/ui';
+import { GridSkeleton, OutfitListSkeleton } from '@/components/skeleton';
 import { WeatherRangeChip } from '@/components/weather-range';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useReplayKey } from '@/hooks/use-replay-key';
@@ -41,6 +42,7 @@ import { sampleImageSource } from '@/lib/sampleImages';
 import { styleName } from '@/lib/styleLibrary';
 import type { Category, Garment, SavedOutfit } from '@/lib/types';
 import { useWornStore, wornToday } from '@/lib/wornStore';
+import { useCollectionsStore } from '@/lib/collectionsStore';
 
 const CATEGORY_FILTERS: { id: Category | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -79,6 +81,28 @@ export default function WardrobeScreen() {
   const [search, setSearch] = useState('');
   const [reviewOnly, setReviewOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+
+  const collections = useCollectionsStore((s) => s.collections);
+  const hydrateCollections = useCollectionsStore((s) => s.hydrate);
+  useEffect(() => {
+    hydrateCollections();
+  }, [hydrateCollections]);
+
+  // The Wardrobe tab can already be mounted when navigated to (e.g. "Wear
+  // another" from Today), so sync the active sub-tab from the URL param each
+  // time it changes — otherwise it stays on whatever was last shown.
+  useEffect(() => {
+    if (params.tab === 'outfits' || params.tab === 'pieces') {
+      setTab(params.tab);
+      setCollectionId(null); // arrive on the full list, not a collection-filtered view
+    }
+  }, [params.tab]);
+  const activeCollection = collectionId ? collections.find((c) => c.id === collectionId) : undefined;
+  const collectionIds = useMemo(
+    () => (activeCollection ? new Set(activeCollection.garmentIds) : null),
+    [activeCollection]
+  );
 
   const closet = useMemo(() => garments ?? [], [garments]);
   const filtered = useMemo(() => {
@@ -88,11 +112,21 @@ export default function WardrobeScreen() {
         (category === 'all' || g.category === category) &&
         (!reviewOnly || g.confidence === 'low') &&
         (!favoritesOnly || g.favorite) &&
+        (!collectionIds || collectionIds.has(g.id)) &&
         (query.length === 0 || matchesSearch(g, query))
     );
-  }, [closet, category, search, reviewOnly, favoritesOnly]);
+  }, [closet, category, search, reviewOnly, favoritesOnly, collectionIds]);
 
-  if (isLoading) return <Loading />;
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <View style={styles.headerRow}>
+          <ThemedText variant="title">My Wardrobe</ThemedText>
+        </View>
+        <GridSkeleton />
+      </SafeAreaView>
+    );
+  }
   if (error) {
     return (
       <EmptyState
@@ -154,6 +188,33 @@ export default function WardrobeScreen() {
         })}
       </View>
 
+      {/* Collection filter — sort pieces & outfits by a packed collection */}
+      <View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectionBar}>
+          {collections.length > 0 ? (
+            <Chip small label="All" selected={!collectionId} onPress={() => setCollectionId(null)} />
+          ) : null}
+          {collections.map((c) => (
+            <Chip
+              key={c.id}
+              small
+              label={c.name}
+              selected={collectionId === c.id}
+              onPress={() => setCollectionId((prev) => (prev === c.id ? null : c.id))}
+            />
+          ))}
+          <Pressable
+            onPress={() => router.push('/collections' as any)}
+            style={[styles.manageChip, { borderColor: theme.border }]}
+            hitSlop={6}>
+            <Ionicons name="albums-outline" size={13} color={theme.terracotta} />
+            <ThemedText color={theme.terracotta} style={{ fontSize: 12.5, fontFamily: Fonts.sansSemiBold }}>
+              {collections.length > 0 ? 'Manage' : 'Collections'}
+            </ThemedText>
+          </Pressable>
+        </ScrollView>
+      </View>
+
       {tab === 'pieces' ? (
         <PiecesView
           closet={closet}
@@ -169,7 +230,7 @@ export default function WardrobeScreen() {
           onOpen={(id) => router.push(`/garment/${id}`)}
         />
       ) : (
-        <OutfitsView />
+        <OutfitsView collectionIds={collectionIds} collectionId={collectionId} collectionName={activeCollection?.name ?? null} />
       )}
     </SafeAreaView>
   );
@@ -278,7 +339,15 @@ const SORTS: { id: OutfitSort; label: string }[] = [
   { id: 'weather', label: 'For today' },
 ];
 
-function OutfitsView() {
+function OutfitsView({
+  collectionIds,
+  collectionId,
+  collectionName,
+}: {
+  collectionIds: Set<string> | null;
+  collectionId: string | null;
+  collectionName: string | null;
+}) {
   const theme = useTheme();
   const router = useRouter();
   const replay = useReplayKey();
@@ -327,7 +396,28 @@ function OutfitsView() {
   }
 
   const outfits = useMemo(() => {
-    const list = [...(saved ?? [])];
+    // When a collection is active, only outfits fully wearable from it.
+    const base = collectionIds
+      ? (saved ?? []).filter((o) => o.garmentIds.every((id) => collectionIds.has(id)))
+      : (saved ?? []);
+    // De-dupe on display: the SAME set of pieces should never appear twice, even
+    // if duplicate rows exist from before the save-guard. Keep the best copy
+    // (favorited > most-worn > newest).
+    const bestByPieces = new Map<string, SavedOutfit>();
+    for (const o of base) {
+      const key = [...o.garmentIds].sort().join('+');
+      const cur = bestByPieces.get(key);
+      if (!cur) {
+        bestByPieces.set(key, o);
+        continue;
+      }
+      const better =
+        (o.favorite ? 1 : 0) - (cur.favorite ? 1 : 0) ||
+        (o.wornCount ?? 0) - (cur.wornCount ?? 0) ||
+        o.createdAt.localeCompare(cur.createdAt);
+      if (better > 0) bestByPieces.set(key, o);
+    }
+    const list = [...bestByPieces.values()];
     const pieceMap = new Map(closet.map((g) => [g.id, g]));
     const midpoint = (o: SavedOutfit) => {
       const r = outfitWeatherRange(o.garmentIds.map((id) => pieceMap.get(id)!).filter(Boolean));
@@ -353,34 +443,47 @@ function OutfitsView() {
       default:
         return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
-  }, [saved, sort, closet, weather]);
+  }, [saved, sort, closet, weather, collectionIds]);
 
   return (
     <View style={{ flex: 1 }}>
+      {/* When a collection is selected, scope generate + build to its pieces. */}
+      {collectionName ? (
+        <View style={[styles.scopeNote, { backgroundColor: theme.terracottaSoft }]}>
+          <Ionicons name="albums-outline" size={13} color={theme.terracotta} />
+          <ThemedText variant="caption" color={theme.terracotta} style={{ fontSize: 12 }}>
+            Building only from “{collectionName}”
+          </ThemedText>
+        </View>
+      ) : null}
       {/* Entry points (flex cells so each PressScale fills half the row) */}
       <View style={styles.outfitCtas}>
         <View style={{ flex: 1 }}>
-          <PressScale onPress={() => router.push('/occasion')} style={[styles.cta, { backgroundColor: theme.accent }]}>
+          <PressScale
+            onPress={() => router.push((collectionId ? `/occasion?collection=${collectionId}` : '/occasion') as any)}
+            style={[styles.cta, { backgroundColor: theme.accent }]}>
             <View>
               <Ionicons name="sparkles-outline" size={20} color={theme.accentText} />
               <ThemedText variant="heading" color={theme.accentText} style={{ fontSize: 13.5, marginTop: 10 }}>
                 Generate a look
               </ThemedText>
               <ThemedText variant="caption" color="#b8b1a6" style={{ fontSize: 11, marginTop: 1 }}>
-                From an occasion
+                {collectionName ? `From ${collectionName}` : 'From an occasion'}
               </ThemedText>
             </View>
           </PressScale>
         </View>
         <View style={{ flex: 1 }}>
-          <PressScale onPress={() => router.push('/outfit-builder')} style={[styles.cta, { backgroundColor: theme.backgroundElementAlt }]}>
+          <PressScale
+            onPress={() => router.push((collectionId ? `/outfit-builder?collection=${collectionId}` : '/outfit-builder') as any)}
+            style={[styles.cta, { backgroundColor: theme.backgroundElementAlt }]}>
             <View>
               <Ionicons name="construct-outline" size={20} color={theme.terracotta} />
               <ThemedText variant="heading" style={{ fontSize: 13.5, marginTop: 10 }}>
                 Build your own
               </ThemedText>
               <ThemedText variant="caption" style={{ fontSize: 11, marginTop: 1 }}>
-                Pick the pieces
+                {collectionName ? 'From this folder' : 'Pick the pieces'}
               </ThemedText>
             </View>
           </PressScale>
@@ -388,7 +491,7 @@ function OutfitsView() {
       </View>
 
       {isLoading ? (
-        <Loading />
+        <OutfitListSkeleton />
       ) : (saved ?? []).length === 0 ? (
         <View style={{ flex: 1 }}>
           <EmptyState
@@ -433,7 +536,7 @@ function OutfitsView() {
               <Animated.View entering={FadeInDown.duration(340).delay(Math.min(index, 6) * 60)}>
                 <PressScale onPress={() => open(item)} style={[styles.outfitCard, { backgroundColor: '#efe9df' }]}>
                   <View>
-                    <OutfitCollage pieces={pieces} height={150} />
+                    <OutfitWhiteboard pieces={pieces} height={150} />
                     <Pressable
                       accessibilityLabel={item.favorite ? 'Remove from favorites' : 'Add to favorites'}
                       onPress={() => toggleFavorite(item)}
@@ -499,7 +602,7 @@ function RecommendedToday({
       </View>
       <PressScale onPress={onOpen} style={[styles.recCard, { backgroundColor: '#efe9df' }]}>
         <View>
-          <OutfitCollage pieces={pieces} height={150} />
+          <OutfitWhiteboard pieces={pieces} height={150} />
           <View style={styles.recFooter}>
             <View style={{ flex: 1 }}>
               <ThemedText variant="heading" style={{ fontSize: 14.5 }}>
@@ -624,6 +727,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: Radius.sm,
   },
+  collectionBar: { gap: 8, paddingHorizontal: 16, paddingBottom: 12, alignItems: 'center' },
+  manageChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
   search: {
     flexDirection: 'row',
@@ -657,6 +770,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     paddingHorizontal: 7,
     paddingVertical: 2,
+  },
+  scopeNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
   },
   outfitCtas: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingBottom: 6 },
   cta: { flex: 1, borderRadius: Radius.xl, padding: 15 },

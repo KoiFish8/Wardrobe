@@ -11,9 +11,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
-import { OutfitCollage } from '@/components/outfit-collage';
+import { OutfitWhiteboard } from '@/components/outfit-whiteboard';
 import { showToast } from '@/components/toast';
-import { Button, Loading, PressScale, ThemedText } from '@/components/ui';
+import { Button, PressScale, ThemedText } from '@/components/ui';
+import { TodaySkeleton } from '@/components/skeleton';
 import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeather } from '@/hooks/use-weather';
@@ -131,9 +132,15 @@ export default function TodayScreen() {
   // What the hero shows: the picked fit if there is one, else the recommendation.
   const heroOutfit = hasSelection ? entryToOutfit(selectedEntry) : recommended;
 
-  if (isLoading) return <Loading />;
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+        <TodaySkeleton />
+      </SafeAreaView>
+    );
+  }
 
-  const name = user?.isDemo ? 'Alex' : (user?.email?.split('@')[0] ?? 'there');
+  const name = user?.username ?? (user?.isDemo ? 'Alex' : (user?.email?.split('@')[0] ?? 'there'));
   const displayName = name.charAt(0).toUpperCase() + name.slice(1);
   const now = new Date();
   const day = now.toLocaleDateString(undefined, { weekday: 'short' });
@@ -209,7 +216,7 @@ export default function TodayScreen() {
         <Animated.View key={`hero-${replay}`} entering={FadeInDown.duration(420)}>
           <PressScale onPress={heroOutfit ? openTodayLook : () => router.push('/scan')} style={[styles.hero, { backgroundColor: '#efe9df' }]}>
             <View>
-              <OutfitCollage pieces={heroPieces} height={286} />
+              <OutfitWhiteboard pieces={heroPieces} height={286} />
               <View style={styles.heroBadge}>
                 <ThemedText variant="overline" color={theme.accentText} style={{ fontSize: 11, letterSpacing: 0.5 }}>
                   {hasSelection ? "Today's look" : heroOutfit ? 'Recommended for today' : 'Today'}
@@ -330,6 +337,24 @@ export default function TodayScreen() {
           </View>
         </Animated.View>
 
+        {/* Ask your stylist (Pro chat) */}
+        <Animated.View key={`assistant-${replay}`} entering={FadeInDown.duration(420).delay(120)} style={styles.assistantWrap}>
+          <PressScale onPress={() => router.push('/assistant' as any)} style={[styles.assistantCard, { backgroundColor: theme.terracottaSoft }]}>
+            <View style={[styles.assistantOrb, { backgroundColor: theme.background }]}>
+              <Ionicons name="sparkles" size={20} color={theme.terracotta} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText variant="heading" style={{ fontSize: 14.5 }}>
+                Ask your stylist
+              </ThemedText>
+              <ThemedText variant="caption" style={{ fontSize: 12, marginTop: 1 }}>
+                What to wear, how to pack, what to buy
+              </ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.terracotta} />
+          </PressScale>
+        </Animated.View>
+
         {/* Recently worn / recent pieces */}
         <Animated.View key={`recent-${replay}`} entering={FadeInDown.duration(420).delay(160)} style={styles.recentSection}>
           <View style={styles.recentHeader}>
@@ -425,6 +450,9 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignSelf: 'stretch', gap: 12, paddingHorizontal: 22, paddingTop: 16 },
   actionCell: { flex: 1 },
   actionCard: { flex: 1, borderRadius: Radius.xl, padding: 16 },
+  assistantWrap: { paddingHorizontal: 22, paddingTop: 16 },
+  assistantCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: Radius.xl },
+  assistantOrb: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   recentSection: { paddingHorizontal: 22, paddingTop: 22 },
   recentHeader: {
     flexDirection: 'row',

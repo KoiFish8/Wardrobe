@@ -10,6 +10,21 @@ export interface TagImageInput {
 
 export type NewGarment = Omit<Garment, 'id' | 'createdAt'>;
 
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AssistantReply {
+  reply: string;
+  /** Messages left in today's quota, when known. */
+  remaining?: number;
+  /** True when the relevance gate redirected an off-topic ask. */
+  offtopic?: boolean;
+  /** Set for Pro/quota gates — a user-facing message instead of an answer. */
+  error?: string;
+}
+
 /**
  * Storage abstraction. SupabaseBackend is the production path (Postgres +
  * Storage + Edge Functions); LocalBackend runs the identical app fully
@@ -45,6 +60,20 @@ export interface WardrobeBackend {
 
   /** The ONLY operation that may reach an LLM (scan → Haiku tags). */
   tagImage(input: TagImageInput): Promise<GarmentSchema>;
+
+  /**
+   * AI crop + background-removed cutout for the whiteboard thumbnail
+   * (crop-garment Edge Function). Returns a cutout image URI (data: or Storage
+   * URL), or null when unavailable (demo mode, or the pipeline isn't configured).
+   */
+  cropGarment(input: { base64: string; mimeType?: string }): Promise<string | null>;
+
+  /**
+   * Capsule Stylist chat (Pro) — grounded answer over the user's wardrobe via the
+   * style-assistant Edge Function (Anthropic Haiku). Returns the reply (or an
+   * error message for Pro/quota gates) and remaining daily messages.
+   */
+  askAssistant(input: { messages: AssistantMessage[]; context: string }): Promise<AssistantReply>;
 
   /** Seed the closet with the 6 real tagged sample garments. */
   importSampleWardrobe(): Promise<Garment[]>;
